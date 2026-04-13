@@ -84,7 +84,26 @@ fi
 
 push_config(){
   cd $config_folder
-  git pull origin $branch --no-rebase
+
+  # Pull remote changes, detect merge conflicts
+  if ! git pull origin $branch --no-rebase; then
+    echo "Merge conflict detected during pull. Resolving by keeping local config..."
+    # Find conflicted files and keep our (local) version
+    conflicted_files=$(git diff --name-only --diff-filter=U)
+    if [ -n "$conflicted_files" ]; then
+      echo "Conflicted files: $conflicted_files"
+      echo "$conflicted_files" | while read -r file; do
+        git checkout --ours "$file"
+        git add "$file"
+      done
+      git commit -m "Auto-resolved merge conflict, kept local config"
+    else
+      # Pull failed for a non-conflict reason, abort merge if in progress
+      git merge --abort 2>/dev/null || true
+      echo "Pull failed but no conflicts found. Skipping pull."
+    fi
+  fi
+
   git add .
   current_date=$(date +"%Y-%m-%d %T")
   git commit -m "Autocommit from $current_date" -m "$m1" -m "$m2" -m "$m3" -m "$m4"
